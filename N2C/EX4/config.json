@@ -1,0 +1,46 @@
+{
+  "data": {
+    "train_dir": "F:\\EX4\\traindata_eptr1",
+    "test_dir": "F:\\EX4\\testdata_eptr2",
+    "val_split": 0.2,
+    "num_workers": 0,
+    "dataset_kwargs": {
+      "channels": 26,
+      "time_length": 1000,
+      "normalize_method": "zscore",
+      "augmentation": true,
+      "data_scale_factor": 1e15
+    }
+  },
+  "model": {
+    "input_channels": 26,
+    "embed_dim": 256,
+    "num_layers": 6,
+    "num_heads": 8,
+    "ffn_dim": 1024,
+    "conv_kernel_size": 31,
+    "dropout": 0.1,
+    "use_pos_encoding": true
+  },
+  "loss": {
+    "type": "combined",
+    "kwargs": {
+      "mse_weight": 1.0,
+      "snr_weight": 0.1,
+      "perceptual_weight": 0.05
+    }
+  },
+  "training": {
+    "batch_size": 16,
+    "learning_rate": 1e-4,
+    "weight_decay": 1e-5,
+    "max_epochs": 100,
+    "patience": 15,
+    "min_delta": 1e-6,
+    "max_grad_norm": 1.0
+  },
+  "logging": {
+    "log_interval": 50
+  },
+  "output_dir": "runs/meg_conformer_train"
+}

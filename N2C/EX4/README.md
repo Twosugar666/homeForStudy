@@ -1,0 +1,2 @@
+1、emptyroom1训练，emptyroom2做测试
+2、denoise的结果也按照noisy1变成denoise1，按照切割的逻辑拼回去
