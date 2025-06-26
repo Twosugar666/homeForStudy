@@ -2,3 +2,5 @@ N2C/EX4/__pycache__/
 N2C/EX4/runs/
 N2C/EX4/testdata_eptr2/
 N2C/EX4/traindata_eptr1/
+N2C/EX4/visualization_results/
+N2C/EX4/finalsim_raw-1-40hz_raw.fif

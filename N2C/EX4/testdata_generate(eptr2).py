@@ -260,17 +260,22 @@ import scipy.io as sio
 import os
 selected_epochs_data = bandpass_epoch[:, :, 200:1201]  # 形状变为 (298, 28, 1001)
 selected_evoked_data = simin_evoked[:, 200:1201]  # 形状变为 (28, 1001)
+
+# 创建目录（如果不存在）
+os.makedirs('testdata_eptr2/noisy', exist_ok=True)
+os.makedirs('testdata_eptr2/clean', exist_ok=True)
+
 # 文件编号
 file_index = 1
 
 # 遍历所有epoch和channels
 for j in range(selected_epochs_data.shape[0]):  # 遍历所有epochs
         # 对于每个epoch的每个channel，保存带噪声的数据
-    noisy_filename = f'F:/EX4/testdata_eptr2/noisy/noisy_{file_index}.mat'
+    noisy_filename = f'testdata_eptr2/noisy/noisy_{file_index}.mat'
     sio.savemat(noisy_filename, {'data': selected_epochs_data[j].astype(np.float64)})
 
     # 对于每个channel，保存干净的数据
-    clean_filename = f'F:/EX4/testdata_eptr2/clean/clean_{file_index}.mat'
+    clean_filename = f'testdata_eptr2/clean/clean_{file_index}.mat'
     sio.savemat(clean_filename, {'data': selected_evoked_data.astype(np.float64)})
 
         # 更新文件编号

@@ -67,11 +67,22 @@ class MEGDenoiseDataset(Dataset):
     
     def _load_file_lists(self) -> Tuple[List[str], List[str]]:
         """加载clean和noisy文件列表"""
-        clean_dir = self.data_dir / 'clean'
-        noisy_dir = self.data_dir / 'noisy'
+        # 处理相对路径
+        data_dir = self.data_dir
+        if not data_dir.is_absolute():
+            # 如果是相对路径，则相对于当前脚本所在目录
+            script_dir = Path(os.path.dirname(os.path.abspath(__file__)))
+            data_dir = script_dir / data_dir
+        
+        clean_dir = data_dir / 'clean'
+        noisy_dir = data_dir / 'noisy'
+        
+        self.logger.info(f"尝试加载数据目录: {data_dir}")
+        self.logger.info(f"clean目录: {clean_dir}")
+        self.logger.info(f"noisy目录: {noisy_dir}")
         
         if not clean_dir.exists() or not noisy_dir.exists():
-            raise ValueError(f"数据目录 {self.data_dir} 中缺少clean或noisy子文件夹")
+            raise ValueError(f"数据目录 {data_dir} 中缺少clean或noisy子文件夹")
         
         # 获取文件列表并排序
         clean_files = sorted(glob.glob(str(clean_dir / "*.mat")))
