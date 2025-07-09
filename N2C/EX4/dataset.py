@@ -27,7 +27,8 @@ class MEGDenoiseDataset(Dataset):
         time_length: Optional[int] = None,
         augmentation: bool = False,
         normalize_method: str = 'zscore',
-        data_scale_factor: float = 1e15  # 将fT量级数据放大到合理范围
+        data_scale_factor: float = 1e15,  # 将fT量级数据放大到合理范围
+        n2n_target_dir: Optional[str] = None
     ):
         """
         初始化MEG去噪数据集
@@ -40,6 +41,9 @@ class MEGDenoiseDataset(Dataset):
             augmentation: 是否启用数据增强
             normalize_method: 标准化方法 ('zscore', 'minmax', 'none')
             data_scale_factor: 数据缩放因子，用于将fT量级数据缩放到合理范围
+            n2n_target_dir: (N2N模式) 包含目标噪声数据的目录路径. 
+                             如果提供, 则从该目录的'noisy'文件夹加载目标数据.
+                             如果为None, 则从'data_dir'的'clean'文件夹加载目标数据 (标准模式).
         """
         self.data_dir = Path(data_dir)
         self.transform = transform
@@ -48,6 +52,8 @@ class MEGDenoiseDataset(Dataset):
         self.augmentation = augmentation
         self.normalize_method = normalize_method
         self.data_scale_factor = data_scale_factor
+        self.n2n_target_dir = Path(n2n_target_dir) if n2n_target_dir else None
+        self.is_n2n = self.n2n_target_dir is not None
         
         # 设置日志
         self.logger = logging.getLogger(__name__)
@@ -63,7 +69,7 @@ class MEGDenoiseDataset(Dataset):
         if self.normalize_method != 'none':
             self._compute_normalization_stats()
         
-        self.logger.info(f"数据集初始化完成: {len(self.clean_files)} 个样本")
+        self.logger.info(f"数据集初始化完成: {len(self.clean_files)} 个样本. N2N模式: {self.is_n2n}")
     
     def _load_file_lists(self) -> Tuple[List[str], List[str]]:
         """加载clean和noisy文件列表"""
@@ -73,23 +79,40 @@ class MEGDenoiseDataset(Dataset):
             # 如果是相对路径，则相对于当前脚本所在目录
             script_dir = Path(os.path.dirname(os.path.abspath(__file__)))
             data_dir = script_dir / data_dir
-        
-        clean_dir = data_dir / 'clean'
+
+        # 输入数据总是来自 data_dir/noisy
         noisy_dir = data_dir / 'noisy'
-        
-        self.logger.info(f"尝试加载数据目录: {data_dir}")
-        self.logger.info(f"clean目录: {clean_dir}")
-        self.logger.info(f"noisy目录: {noisy_dir}")
-        
-        if not clean_dir.exists() or not noisy_dir.exists():
-            raise ValueError(f"数据目录 {data_dir} 中缺少clean或noisy子文件夹")
-        
-        # 获取文件列表并排序
-        clean_files = sorted(glob.glob(str(clean_dir / "*.mat")))
+        self.logger.info(f"加载输入数据目录: {noisy_dir}")
+        if not noisy_dir.exists():
+            raise ValueError(f"输入数据目录 {noisy_dir} 不存在")
         noisy_files = sorted(glob.glob(str(noisy_dir / "*.mat")))
-        
-        if len(clean_files) == 0 or len(noisy_files) == 0:
-            raise ValueError("未找到.mat数据文件")
+
+        # 目标数据根据N2N模式确定
+        if self.is_n2n:
+            # N2N模式: 目标是另一个噪声数据集
+            # Note: n2n_target_dir may be relative, handle it like data_dir
+            target_dir_base = self.n2n_target_dir
+            if not target_dir_base.is_absolute():
+                script_dir = Path(os.path.dirname(os.path.abspath(__file__)))
+                target_dir_base = script_dir / target_dir_base
+            
+            target_dir = target_dir_base / 'noisy'
+            self.logger.info(f"加载N2N目标数据目录: {target_dir}")
+            if not target_dir.exists():
+                raise ValueError(f"N2N目标数据目录 {target_dir} 不存在")
+            clean_files = sorted(glob.glob(str(target_dir / "*.mat")))
+        else:
+            # 标准模式: 目标是干净数据
+            target_dir = data_dir / 'clean'
+            self.logger.info(f"加载目标(clean)数据目录: {target_dir}")
+            if not target_dir.exists():
+                raise ValueError(f"数据目录 {data_dir} 中缺少clean子文件夹")
+            clean_files = sorted(glob.glob(str(target_dir / "*.mat")))
+
+        if len(noisy_files) == 0:
+            raise ValueError(f"输入目录 {noisy_dir} 未找到.mat数据文件")
+        if len(clean_files) == 0:
+            raise ValueError(f"目标目录 {target_dir} 未找到.mat数据文件")
         
         return clean_files, noisy_files
     
@@ -97,14 +120,20 @@ class MEGDenoiseDataset(Dataset):
         """验证clean和noisy文件是否一一对应"""
         if len(self.clean_files) != len(self.noisy_files):
             raise ValueError(
-                f"Clean文件数量({len(self.clean_files)}) "
-                f"与Noisy文件数量({len(self.noisy_files)})不匹配"
+                f"目标文件数量({len(self.clean_files)}) "
+                f"与输入文件数量({len(self.noisy_files)})不匹配"
             )
         
         # 检查文件名是否对应
         for clean_file, noisy_file in zip(self.clean_files, self.noisy_files):
-            clean_name = Path(clean_file).stem.replace('clean_', '')
             noisy_name = Path(noisy_file).stem.replace('noisy_', '')
+            
+            if self.is_n2n:
+                # N2N 模式下, 目标文件也是 noisy
+                clean_name = Path(clean_file).stem.replace('noisy_', '')
+            else:
+                # 标准模式下, 目标文件是 clean
+                clean_name = Path(clean_file).stem.replace('clean_', '')
             
             if clean_name != noisy_name:
                 raise ValueError(f"文件名不匹配: {clean_file} vs {noisy_file}")
@@ -170,10 +199,14 @@ class MEGDenoiseDataset(Dataset):
         """计算数据集的标准化统计量"""
         self.logger.info("计算数据集标准化统计量...")
         
+        # 在N2N模式下，应基于输入噪声数据计算统计量
+        # 在标准模式下，基于干净数据计算更稳定
+        files_to_use = self.noisy_files if self.is_n2n else self.clean_files
+
         all_data = []
         
         # 从前100个样本计算统计量以提高效率
-        sample_files = self.clean_files[:min(100, len(self.clean_files))]
+        sample_files = files_to_use[:min(100, len(files_to_use))]
         
         for file_path in sample_files:
             try:
@@ -271,44 +304,56 @@ class MEGDenoiseDataset(Dataset):
     
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-        获取单个样本
+        获取一个数据样本
         
         Args:
             idx: 样本索引
             
         Returns:
-            (noisy_data, clean_data): 噪声数据和干净数据的张量对
+            noisy_tensor: 带噪信号张量 (输入)
+            clean_tensor: 干净信号张量 (目标)
         """
+        if idx < 0 or idx >= len(self):
+            raise IndexError("索引超出范围")
+
+        # noisy_files是输入, clean_files是目标(可以是clean, 也可以是n2n的noisy)
+        noisy_file = self.noisy_files[idx]
+        clean_file = self.clean_files[idx]
+        
         # 加载数据
-        clean_data = self._load_mat_file(self.clean_files[idx])
-        noisy_data = self._load_mat_file(self.noisy_files[idx])
-        
+        try:
+            noisy_data = self._load_mat_file(noisy_file)
+            clean_data = self._load_mat_file(clean_file)
+        except Exception as e:
+            self.logger.error(f"加载文件失败 (index {idx}): {str(e)}")
+            # 返回空张量或进行其他错误处理
+            return torch.zeros(self.channels, 1), torch.zeros(self.channels, 1)
+
         # 预处理
-        clean_data = self._preprocess_data(clean_data)
         noisy_data = self._preprocess_data(noisy_data)
-        
-        # 应用额外变换
+        clean_data = self._preprocess_data(clean_data)
+
+        # 转换为Tensor
+        noisy_tensor = torch.from_numpy(noisy_data.copy())
+        clean_tensor = torch.from_numpy(clean_data.copy())
+
+        # 应用数据变换
         if self.transform:
-            clean_data = self.transform(clean_data)
-            noisy_data = self.transform(noisy_data)
-        
-        # 转换为张量
-        clean_tensor = torch.tensor(clean_data, dtype=torch.float32)
-        noisy_tensor = torch.tensor(noisy_data, dtype=torch.float32)
-        
+            noisy_tensor, clean_tensor = self.transform(noisy_tensor, clean_tensor)
+            
         return noisy_tensor, clean_tensor
-    
+        
     def get_data_info(self) -> Dict:
         """获取数据集信息"""
         sample_data = self._load_mat_file(self.clean_files[0])
         
         return {
-            'num_samples': len(self),
-            'num_channels': sample_data.shape[0],
-            'original_time_length': sample_data.shape[1],
-            'processed_time_length': self.time_length or sample_data.shape[1],
-            'data_range': (np.min(sample_data), np.max(sample_data)),
-            'data_std': np.std(sample_data)
+            "num_samples": len(self),
+            "channels": self.channels,
+            "time_length": self.time_length,
+            "augmentation": self.augmentation,
+            "normalization": self.normalize_method,
+            "n2n_mode": self.is_n2n
         }
 
 
@@ -319,6 +364,7 @@ def create_data_loaders(
     num_workers: int = 4,
     train_shuffle: bool = True,
     val_split: float = 0.2,
+    n2n_target_dir: Optional[str] = None,
     **dataset_kwargs
 ) -> Tuple[DataLoader, DataLoader, Optional[DataLoader]]:
     """
@@ -331,28 +377,34 @@ def create_data_loaders(
         num_workers: 数据加载工作进程数
         train_shuffle: 是否打乱训练数据
         val_split: 验证集划分比例
-        **dataset_kwargs: 传递给数据集的额外参数
+        test_data_dir: 测试数据目录
+        n2n_target_dir: (N2N模式) 包含目标噪声数据的目录路径
+        dataset_kwargs: 传递给MEGDenoiseDataset的其他参数
     
     Returns:
-        (train_loader, val_loader, test_loader): 数据加载器元组
+        train_loader: 训练数据加载器
     """
-    # 创建训练数据集
-    full_dataset = MEGDenoiseDataset(train_data_dir, **dataset_kwargs)
     
-    # 划分训练和验证集
-    dataset_size = len(full_dataset)
-    val_size = int(val_split * dataset_size)
-    train_size = dataset_size - val_size
-    
-    train_dataset, val_dataset = torch.utils.data.random_split(
-        full_dataset, [train_size, val_size]
+    # 训练和验证数据集
+    train_val_dataset = MEGDenoiseDataset(
+        data_dir=train_data_dir, 
+        n2n_target_dir=n2n_target_dir, 
+        **dataset_kwargs
     )
     
-    # 为验证集禁用数据增强
-    if hasattr(full_dataset, 'augmentation'):
-        val_dataset.dataset.augmentation = False
+    # 划分训练集和验证集
+    dataset_size = len(train_val_dataset)
+    val_size = int(len(train_val_dataset) * val_split)
+    train_size = len(train_val_dataset) - val_size
     
-    # 创建数据加载器
+    if train_size == 0 or val_size == 0:
+        raise ValueError("数据集太小, 无法划分为训练集和验证集")
+        
+    train_dataset, val_dataset = torch.utils.data.random_split(
+        train_val_dataset, [train_size, val_size]
+    )
+    
+    # 创建训练和验证数据加载器
     train_loader = DataLoader(
         train_dataset,
         batch_size=batch_size,
@@ -371,13 +423,14 @@ def create_data_loaders(
         drop_last=False
     )
     
-    # 创建测试数据加载器（如果提供测试数据目录）
+    # 测试数据加载器
     test_loader = None
     if test_data_dir:
-        test_dataset_kwargs = dataset_kwargs.copy()
-        test_dataset_kwargs['augmentation'] = False  # 测试时不使用数据增强
-        
-        test_dataset = MEGDenoiseDataset(test_data_dir, **test_dataset_kwargs)
+        test_dataset = MEGDenoiseDataset(
+            data_dir=test_data_dir, 
+            n2n_target_dir=n2n_target_dir, # 测试集也需要N2N目标
+            **dataset_kwargs
+        )
         test_loader = DataLoader(
             test_dataset,
             batch_size=batch_size,
@@ -386,7 +439,7 @@ def create_data_loaders(
             pin_memory=torch.cuda.is_available(),
             drop_last=False
         )
-    
+        
     return train_loader, val_loader, test_loader
 
 

@@ -134,11 +134,13 @@ class Trainer:
         """创建数据加载器"""
         train_data_dir = self.config['data']['train_dir']
         test_data_dir = self.config['data'].get('test_dir', None)
+        n2n_target_dir = self.config['data'].get('n2n_target_dir', None)
         
         # 创建数据加载器
         train_loader, val_loader, test_loader = create_data_loaders(
             train_data_dir=train_data_dir,
             test_data_dir=test_data_dir,
+            n2n_target_dir=n2n_target_dir,
             batch_size=self.config['training']['batch_size'],
             num_workers=self.config['data']['num_workers'],
             val_split=self.config['data'].get('val_split', 0.2),
@@ -339,7 +341,13 @@ def main():
                        help='配置文件路径')
     parser.add_argument('--resume', type=str, default=None,
                        help='恢复训练的检查点路径')
-    
+    parser.add_argument('--test_dir', type=str, help='Override test directory')
+    parser.add_argument('--output_dir', type=str, help='Override output directory')
+    parser.add_argument('--epochs', type=int, help='Override number of epochs')
+    parser.add_argument('--lr', type=float, help='Override learning rate')
+    parser.add_argument('--batch_size', type=int, help='Override batch size')
+    parser.add_argument('--n2n_target_dir', type=str, help='(N2N) Override N2N target directory')
+
     args = parser.parse_args()
     
     # 默认配置
@@ -403,6 +411,19 @@ def main():
         save_config(config, '.')
         print(f"已创建默认配置文件: {args.config}")
     
+    if args.test_dir:
+        config['data']['test_dir'] = args.test_dir
+    if args.output_dir:
+        config['output_dir'] = args.output_dir
+    if args.epochs:
+        config['training']['max_epochs'] = args.epochs
+    if args.lr:
+        config['training']['learning_rate'] = args.lr
+    if args.batch_size:
+        config['training']['batch_size'] = args.batch_size
+    if args.n2n_target_dir:
+        config['data']['n2n_target_dir'] = args.n2n_target_dir
+
     # 创建训练器
     trainer = Trainer(config)
     

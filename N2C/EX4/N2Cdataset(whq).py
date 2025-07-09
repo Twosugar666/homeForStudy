@@ -1,6 +1,12 @@
 #!/user/bin/env python3
 # -*- coding: utf-8 -*-
 #%%
+import os
+import tempfile
+
+# 设置joblib的临时文件夹为一个只包含ASCII字符的路径
+os.environ['JOBLIB_TEMP_FOLDER'] = os.path.join(tempfile.gettempdir(), 'joblib_temp')
+
 import numpy as np
 import mne
 import matplotlib.pyplot as plt
@@ -29,18 +35,16 @@ from scipy import linalg
 ###数据加载
 
 
-Empty1file = 'E:\study\MEG\MEG\data\whq_kfj.mat'
+Empty1file = 'E:\\study\\MEG\\MEG\\data\\whq_kfj.mat'
 Empty1_from_file = scipy.io.loadmat(Empty1file)
 Emptyroom1data = np.array(Empty1_from_file["B1"])#加入仿真信号中的噪声数据
 
-#Rawdata = np.zeros((32,300000),dtype=np.double)
-Rawdata = np.zeros((29,300000),dtype=np.double)#6.18 N2C 28channal
+Rawdata = np.zeros((27,300000),dtype=np.double)
 #Rawdata = np.array(Raw_from_file["B1"])    # (730048, 32)
 
 
 ###加载数据通道信息
-#chan0_pick = np.arange(32)
-chan0_pick = np.arange(29)#6.18 N2C 28channal
+chan0_pick = np.arange(27)
 #chan0_pick = [0, 1, 2, 3, 4,  6, 7, 8, 9, 10, ]  # 10cm---03.03
 
 raw_chose = Rawdata[chan0_pick]  # 选择通道，截取片段
@@ -51,28 +55,33 @@ raw0 = raw_chose
 a = 0
 b = 300000
 #raw0 = raw_chose
-#chan1_pick = [0, 1, 2, 3, 4,  6, 7, 8, 9, 10,  12, 13, 14, 15, 16,
-     #17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,  29, 31, 32, 33, 34]#teHFC
-chan1_pick = [0, 1, 2, 3,   6, 7, 8, 9, 10,  12, 13, 14, 15, 16,
-     17, 18, 19, 20, 21, 22, 23, 24, 25,  27,  29, 31,  33, 34]#N2C 28chan,4\26\32
+# 统一使用traindata_generate(eptr1).py中的通道选择逻辑
+chan1_pick = [0, 1, 2, 3,    7,  9,
+              10,  12,  14, 15,  17, 18, 19,
+               21,   24, 25, 26, 27, 28, 29,
+              30, 31, 32, 33, 34, 35]
 
+# 从原始36+通道数据中选择26个通道
 Emptyroom1_raw_chose = Emptyroom1data[chan1_pick,a:b]
 Emptyroom1_raw_chose = Emptyroom1_raw_chose / 2.7 / 1e9 / 0.33
-Emptyroom1_raw0 = np.row_stack((Emptyroom1_raw_chose, raw0[28]))
+# 堆叠26个MEG通道和1个刺激通道
+Emptyroom1_raw0 = np.row_stack((Emptyroom1_raw_chose, raw0[26]))
+
 
 info = mne.create_info(
-    ch_names=[f'{n}' for n in range(0,28)]+['STI 014'],
+    ch_names=[f'{n}' for n in range(0,26)]+['STI 014'],
 
 
-    ch_types=['eeg']*28+['stim'],
+    ch_types=['eeg']*26+['stim'],
     sfreq=1000)
 Raw0 = mne.io.RawArray(raw0, info)#真实数据
 #event0 = mne.find_events(Raw0, stim_channel='STI 014', initial_event=True)
 
 Emptyroom1_Raw0 = mne.io.RawArray(Emptyroom1_raw0, info)#真实空房间数据
 
-sensorfile = scipy.io.loadmat('E:\study\MEG\MEG\data\wuhuanqipos.mat')  # E://mne//26channel-8.31//数据//pos_cfz.mat
-sensor_data = sensorfile['new1']
+# 统一使用traindata_generate(eptr1).py中的传感器配置文件
+sensorfile = scipy.io.loadmat(r'E:\study\MEG\MEG\data\20230726zrcpos')
+sensor_data = sensorfile['new_sensors']
 sensor_pos = sensor_data[0, 0]['pos'] # (104, 3) 这是什么坐标？？
 sensor_pos = sensor_pos.T / 1000  # （3, 104)
 sensor_pos.shape[0]
@@ -80,19 +89,17 @@ sensor_ori = sensor_data[0,0]['ori']
 sensor_ori = sensor_ori
 sensor_ori = sensor_ori.T
 # j是什么？
-#sensor_pick = [83, 77, 73, 18, 7,  1, 54, 0, 16, 81,  55, 56, 53, 80, 84, 64, 8, 67, 9, 66,
-     #82, 75, 29, 65, 3, 74,  27, 10, 17, 76, 6]#teHFC
-sensor_pick = [83, 77, 73, 18,   1, 54, 0, 16, 81,  55, 56, 53, 80, 84, 64, 8, 67, 9, 66,
-     82, 75, 29, 65,  74,  27, 10,  76, 6]#N2C 28chan,7\3\17
-pos_final = sensor_pos[0:3,sensor_pick]#提取28个通道的传感器位置  j!
+# 统一使用traindata_generate(eptr1).py中的传感器选择逻辑
+sensor_pick = [9,18,29,5,8,27,22,17,19,30,15,11,10,7,3,0,26,20,4,24,2,31,21,23,25,13]
+pos_final = sensor_pos[0:3,sensor_pick]#提取26个通道的传感器位置
 ori_final=sensor_ori[0:3,sensor_pick]
-dic = {str(i):pos_final[0:3,i] for i in range(28)}  #26!
+dic = {str(i):pos_final[0:3,i] for i in range(26)}  #26!
 montage = mne.channels.make_dig_montage(ch_pos=dic,coord_frame='head')
 Raw0 = Raw0.set_montage(montage)
 Emptyroom1_Raw0 = Emptyroom1_Raw0.set_montage(montage)
 montage.plot(kind='topomap', show_names=True)
 plt.show(block=True)
-for j in range(28):
+for j in range(26):
     Raw0.info['dig'][j]['kind'] = 4
     Raw0.info['chs'][j]['kind'] = mne.io.constants.FIFF.FIFFV_MEG_CH
     Raw0.info['chs'][j]['unit'] = mne.io.constants.FIFF.FIFF_UNIT_T
@@ -228,86 +235,40 @@ simin_evoked=evoked_simin.get_data(picks=['meg'])#Y
 evoked_simin.plot(spatial_colors=True,titles=None)
 evoked_bandpass.plot(spatial_colors=True,titles=None)
 plt.show(block=True)
+
 #%%whq_data_mat生成N2C
 import numpy as np
 import scipy.io as sio
 import os
-selected_epochs_data = bandpass_epoch[:, :, 200:1201]  # 形状变为 (298, 28, 1001)
-selected_evoked_data = simin_evoked[:, 200:1201]  # 形状变为 (28, 1001)
+# 修改以处理26个MEG通道
+selected_epochs_data = bandpass_epoch[:, :26, 200:1201]  # 形状变为 (n_epochs, 26, 1001)
+selected_evoked_data = simin_evoked[:, 200:1201]  # 形状变为 (26, 1001)
+
+# 创建目录（如果不存在）
+# 建议为第二组数据创建一个新目录，例如 traindata_eptr1_n2n
+output_dir_noisy = 'EX4/traindata_whq/noisy'
+output_dir_clean = 'EX4/traindata_whq/clean'
+os.makedirs(output_dir_noisy, exist_ok=True)
+os.makedirs(output_dir_clean, exist_ok=True)
+
+
 # 文件编号
 file_index = 1
 
 # 遍历所有epoch和channels
 for j in range(selected_epochs_data.shape[0]):  # 遍历所有epochs
-    for i in range(selected_epochs_data.shape[1]):  # 遍历所有channels
         # 对于每个epoch的每个channel，保存带噪声的数据
-        noisy_filename = f'F:/EX4/data/whq/all_clean/noisy_{file_index}.mat'
-        sio.savemat(noisy_filename, {'data': selected_epochs_data[j, i].astype(np.float64)})
+    noisy_filename = os.path.join(output_dir_noisy, f'noisy_{file_index}.mat')
+    sio.savemat(noisy_filename, {'data': selected_epochs_data[j].astype(np.float64)})
 
-        # 对于每个channel，保存干净的数据
-        clean_filename = f'F:/EX4/data/whq/all_clean/clean_{file_index}.mat'
-        sio.savemat(clean_filename, {'data': selected_evoked_data[i].astype(np.float64)})
+    # 对于每个channel，保存干净的数据
+    # 注意：对于N2N，干净信号应该是完全相同的
+    clean_filename = os.path.join(output_dir_clean, f'clean_{file_index}.mat')
+    sio.savemat(clean_filename, {'data': selected_evoked_data.astype(np.float64)})
 
         # 更新文件编号
-        file_index += 1
+    file_index += 1
 
 print("所有文件已成功保存。")
 
 #%%从all_whq划分至各文件夹811
-import os
-import shutil
-import re
-
-def numerical_sort(value):
-        """通过正则表达式提取文件名中的数字进行排序"""
-        base_name = os.path.splitext(value)[0]  # 移除文件扩展名
-        numbers = re.findall(r'\d+', base_name)
-        if numbers:
-            return int(numbers[0])  # 返回第一个数字串作为整数
-
-        return 0  # 如果没有找到数字，返回0作为默认值
-def ensure_dir(directory):
-    """确保目录存在，如果不存在就创建它"""
-    os.makedirs(directory, exist_ok=True)
-def distribute_files_grouped(source_dir, train_dir, valid_dir, test_dir):
-    # 获取source_dir中的所有文件
-    ensure_dir(source_dir)
-    ensure_dir(train_dir)
-    ensure_dir(valid_dir)
-    ensure_dir(test_dir)
-    # 获取source_dir中的所有文件
-    files = os.listdir(source_dir)
-    # 按数值排序文件
-    files_sorted = sorted(files, key=numerical_sort)
-
-    # 按照每10个文件分组，分配到不同的文件夹
-    for index, file in enumerate(files_sorted):
-        # 计算该文件应该被分配到的组
-        group = index % 10
-        if group < 8:
-            target_dir = train_dir
-        elif group == 8:
-            target_dir = valid_dir
-        elif group == 9:
-            target_dir = test_dir
-
-        # 复制文件到目标文件夹
-        shutil.copy(os.path.join(source_dir, file), target_dir)
-
-
-
-# 指定源文件夹和目标文件夹路径1
-source_noisy = r'F:/EX4/data/whq/all_clean/nois'
-source_clean = r'F:/EX4/data/whq/all_clean/clean'
-target_train_noisy = r'F:/EX4/data/whq/train/noisy'
-target_train_clean = r'F:/EX4/data/whq/train/clean'
-target_valid_noisy = r'F:/EX4/data/whq/valid/noisy'
-target_valid_clean = r'F:/EX4/data/whq/valid/clean'
-target_test_noisy =  r'F:/EX4/data/whq/test/noisy'
-target_test_clean =  r'F:/EX4/data/whq/test/clean'
-
-# 分配noisy文件
-distribute_files_grouped(source_noisy, target_train_noisy, target_valid_noisy, target_test_noisy)
-# 分配clean文件
-distribute_files_grouped(source_clean, target_train_clean, target_valid_clean, target_test_clean)
-print('所有数据已分配至各文件夹')
