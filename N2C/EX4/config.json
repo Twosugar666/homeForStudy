@@ -1,7 +1,7 @@
 {
   "data": {
     "train_dir": "traindata_eptr1",
-    "test_dir": "testdata_eptr2",
+    "target_dir": "traindata_whq",
     "val_split": 0.2,
     "num_workers": 0,
     "dataset_kwargs": {
@@ -23,12 +23,7 @@
     "use_pos_encoding": true
   },
   "loss": {
-    "type": "combined",
-    "kwargs": {
-      "mse_weight": 1.0,
-      "snr_weight": 0.1,
-      "perceptual_weight": 0.05
-    }
+    "type": "mse"
   },
   "training": {
     "batch_size": 16,

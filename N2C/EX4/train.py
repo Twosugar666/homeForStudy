@@ -132,15 +132,13 @@ class Trainer:
         
     def create_data_loaders(self):
         """创建数据加载器"""
-        train_data_dir = self.config['data']['train_dir']
-        test_data_dir = self.config['data'].get('test_dir', None)
-        n2n_target_dir = self.config['data'].get('n2n_target_dir', None)
+        input_data_dir = self.config['data']['train_dir']
+        target_data_dir = self.config['data']['target_dir']
         
         # 创建数据加载器
-        train_loader, val_loader, test_loader = create_data_loaders(
-            train_data_dir=train_data_dir,
-            test_data_dir=test_data_dir,
-            n2n_target_dir=n2n_target_dir,
+        train_loader, val_loader = create_data_loaders(
+            input_data_dir=input_data_dir,
+            target_data_dir=target_data_dir,
             batch_size=self.config['training']['batch_size'],
             num_workers=self.config['data']['num_workers'],
             val_split=self.config['data'].get('val_split', 0.2),
@@ -149,10 +147,8 @@ class Trainer:
         
         self.logger.info(f"训练数据批次数: {len(train_loader)}")
         self.logger.info(f"验证数据批次数: {len(val_loader)}")
-        if test_loader:
-            self.logger.info(f"测试数据批次数: {len(test_loader)}")
         
-        return train_loader, val_loader, test_loader
+        return train_loader, val_loader
         
     def train_epoch(self, train_loader: DataLoader) -> float:
         """训练一个epoch"""
@@ -289,7 +285,7 @@ class Trainer:
         self.logger.info("开始训练...")
         
         # 创建数据加载器
-        train_loader, val_loader, test_loader = self.create_data_loaders()
+        train_loader, val_loader = self.create_data_loaders()
         
         for epoch in range(self.epoch, self.config['training']['max_epochs']):
             self.epoch = epoch

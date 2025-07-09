@@ -271,7 +271,7 @@ class MEGDenoiseEvaluator:
 
 
 # 默认参数设置 - 使用相对路径
-DEFAULT_MODEL_PATH = "runs/meg_conformer_train/latest_checkpoint.pth"  # 模型权重文件的相对路径
+DEFAULT_MODEL_PATH = "runs/meg_conformer_train/best_model.pth"  # 模型权重文件的相对路径
 DEFAULT_TEST_DIR = "testdata_eptr2"  # 测试数据目录的相对路径
 DEFAULT_DENOISED_DIR = "visualization_results/denoised_data"  # 去噪数据目录的相对路径
 DEFAULT_OUTPUT_DIR = r"F:\home\homeForStudy\N2C\EX4\visualization_results"  # 输出目录的绝对路径

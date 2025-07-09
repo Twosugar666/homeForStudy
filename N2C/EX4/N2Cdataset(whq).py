@@ -242,33 +242,23 @@ import scipy.io as sio
 import os
 # 修改以处理26个MEG通道
 selected_epochs_data = bandpass_epoch[:, :26, 200:1201]  # 形状变为 (n_epochs, 26, 1001)
-selected_evoked_data = simin_evoked[:, 200:1201]  # 形状变为 (26, 1001)
 
-# 创建目录（如果不存在）
-# 建议为第二组数据创建一个新目录，例如 traindata_eptr1_n2n
-output_dir_noisy = 'EX4/traindata_whq/noisy'
-output_dir_clean = 'EX4/traindata_whq/clean'
+# 只创建noisy目录，删除clean数据生成
+output_dir_noisy = 'traindata_whq/noisy'
 os.makedirs(output_dir_noisy, exist_ok=True)
-os.makedirs(output_dir_clean, exist_ok=True)
-
 
 # 文件编号
 file_index = 1
 
 # 遍历所有epoch和channels
 for j in range(selected_epochs_data.shape[0]):  # 遍历所有epochs
-        # 对于每个epoch的每个channel，保存带噪声的数据
+    # 只保存带噪声的数据（仿真信号B + 空房间噪声）
     noisy_filename = os.path.join(output_dir_noisy, f'noisy_{file_index}.mat')
     sio.savemat(noisy_filename, {'data': selected_epochs_data[j].astype(np.float64)})
-
-    # 对于每个channel，保存干净的数据
-    # 注意：对于N2N，干净信号应该是完全相同的
-    clean_filename = os.path.join(output_dir_clean, f'clean_{file_index}.mat')
-    sio.savemat(clean_filename, {'data': selected_evoked_data.astype(np.float64)})
-
-        # 更新文件编号
+    
+    # 更新文件编号
     file_index += 1
 
-print("所有文件已成功保存。")
+print("N2N训练数据已保存 - 只生成噪声数据，无clean数据")
 
 #%%从all_whq划分至各文件夹811
