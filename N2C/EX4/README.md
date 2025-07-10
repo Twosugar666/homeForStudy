@@ -1,2 +1,4 @@
 1、emptyroom1训练，emptyroom2做测试
 2、denoise的结果也按照noisy1变成denoise1，按照切割的逻辑拼回去
+20250708之前的版本是N2C
+20250709改成N2N，训练了37epoch，效果一般，是comformer，未加入注意力机制
